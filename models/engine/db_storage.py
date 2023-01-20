@@ -1,76 +1,142 @@
 #!/usr/bin/python3
-"""
-Contains the class DBStorage
-"""
-
-import models
-from models.amenity import Amenity
-from models.base_model import BaseModel, Base
-from models.city import City
-from models.place import Place
-from models.review import Review
-from models.state import State
+'''
+    Testing the file_storage module.
+'''
+import time
+import unittest
+import sys
+from models.engine.db_storage import DBStorage
+from models import storage
 from models.user import User
+from models.state import State
+from models import storage
+from console import HBNBCommand
 from os import getenv
-import sqlalchemy
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
+from io import StringIO
 
-classes = {"Amenity": Amenity, "City": City,
-           "Place": Place, "Review": Review, "State": State, "User": User}
+db = getenv("HBNB_TYPE_STORAGE")
 
 
-class DBStorage:
-    """interaacts with the MySQL database"""
-    __engine = None
-    __session = None
+@unittest.skipIf(db != 'db', "Testing DBstorage only")
+class test_DBStorage(unittest.TestCase):
+    '''
+        Testing the DB_Storage class
+    '''
+    @classmethod
+    def setUpClass(cls):
+        '''
+            Initializing classes
+        '''
+        cls.dbstorage = DBStorage()
+        cls.output = StringIO()
+        sys.stdout = cls.output
 
-    def __init__(self):
-        """Instantiate a DBStorage object"""
-        HBNB_MYSQL_USER = getenv('HBNB_MYSQL_USER')
-        HBNB_MYSQL_PWD = getenv('HBNB_MYSQL_PWD')
-        HBNB_MYSQL_HOST = getenv('HBNB_MYSQL_HOST')
-        HBNB_MYSQL_DB = getenv('HBNB_MYSQL_DB')
-        HBNB_ENV = getenv('HBNB_ENV')
-        self.__engine = create_engine('mysql+mysqldb://{}:{}@{}/{}'.
-                                      format(HBNB_MYSQL_USER,
-                                             HBNB_MYSQL_PWD,
-                                             HBNB_MYSQL_HOST,
-                                             HBNB_MYSQL_DB))
-        if HBNB_ENV == "test":
-            Base.metadata.drop_all(self.__engine)
+    @classmethod
+    def tearDownClass(cls):
+        '''
+            delete variables
+        '''
+        del cls.dbstorage
+        del cls.output
 
-    def all(self, cls=None):
-        """query on the current database session"""
-        new_dict = {}
-        for clss in classes:
-            if cls is None or cls is classes[clss] or cls is clss:
-                objs = self.__session.query(classes[clss]).all()
-                for obj in objs:
-                    key = obj.__class__.__name__ + '.' + obj.id
-                    new_dict[key] = obj
-        return (new_dict)
+    def create(self):
+        '''
+            Create HBNBCommand()
+        '''
+        return HBNBCommand()
 
-    def new(self, obj):
-        """add the object to the current database session"""
-        self.__session.add(obj)
+    def test_new(self):
+        '''
+            Test DB new
+        '''
+        new_obj = State(name="California")
+        self.assertEqual(new_obj.name, "California")
 
-    def save(self):
-        """commit all changes of the current database session"""
-        self.__session.commit()
+    def test_dbstorage_user_attr(self):
+        '''
+            Testing User attributes
+        '''
+        new = User(email="melissa@hbtn.com", password="hello")
+        self.assertTrue(new.email, "melissa@hbtn.com")
 
-    def delete(self, obj=None):
-        """delete from the current database session obj if not None"""
-        if obj is not None:
-            self.__session.delete(obj)
+    def test_dbstorage_check_method(self):
+        '''
+            Check methods exists
+        '''
+        self.assertTrue(hasattr(self.dbstorage, "all"))
+        self.assertTrue(hasattr(self.dbstorage, "__init__"))
+        self.assertTrue(hasattr(self.dbstorage, "new"))
+        self.assertTrue(hasattr(self.dbstorage, "save"))
+        self.assertTrue(hasattr(self.dbstorage, "delete"))
+        self.assertTrue(hasattr(self.dbstorage, "reload"))
 
-    def reload(self):
-        """reloads data from the database"""
-        Base.metadata.create_all(self.__engine)
-        sess_factory = sessionmaker(bind=self.__engine, expire_on_commit=False)
-        Session = scoped_session(sess_factory)
-        self.__session = Session
+    def test_dbstorage_all(self):
+        '''
+            Testing all function
+        '''
+        storage.reload()
+        result = storage.all("")
+        self.assertIsInstance(result, dict)
+        self.assertEqual(len(result), 0)
+        new = User(email="adriel@hbtn.com", password="abc")
+        console = self.create()
+        console.onecmd("create State name=California")
+        result = storage.all("State")
+        self.assertTrue(len(result) > 0)
 
-    def close(self):
-        """call remove() method on the private session attribute"""
-        self.__session.remove()
+    def test_dbstorage_new_save(self):
+        '''
+           Testing save method
+        '''
+        new_state = State(name="NewYork")
+        storage.new(new_state)
+        save_id = new_state.id
+        result = storage.all("State")
+        temp_list = []
+        for k, v in result.items():
+            temp_list.append(k.split('.')[1])
+            obj = v
+        self.assertTrue(save_id in temp_list)
+        self.assertIsInstance(obj, State)
+
+    def test_dbstorage_delete(self):
+        '''
+            Testing delete method
+        '''
+        new_user = User(email="haha@hehe.com", password="abc",
+                        first_name="Adriel", last_name="Tolentino")
+        storage.new(new_user)
+        save_id = new_user.id
+        key = "User.{}".format(save_id)
+        self.assertIsInstance(new_user, User)
+        storage.save()
+        old_result = storage.all("User")
+        del_user_obj = old_result[key]
+        storage.delete(del_user_obj)
+        new_result = storage.all("User")
+        self.assertNotEqual(len(old_result), len(new_result))
+
+    def test_model_storage(self):
+        '''
+            Test to check if storage is an instance for DBStorage
+        '''
+        self.assertTrue(isinstance(storage, DBStorage))
+
+    def test_db_storage_get(self):
+        '''
+            Check if instance gotten for DBStorage
+        '''
+        new_o = State(name="Cali")
+        obj = storage.get("State", "fake_id")
+        self.assertIsNone(obj)
+
+    def test_db_storage_count(self):
+        '''
+            Check total count of objs in DBStorage
+        '''
+        storage.reload()
+        all_count = storage.count(None)
+        self.assertIsInstance(all_count, int)
+        cls_count = storage.count("State")
+        self.assertIsInstance(cls_count, int)
+        self.assertGreaterEqual(all_count, cls_count)
