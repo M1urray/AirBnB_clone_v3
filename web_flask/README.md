@@ -19,17 +19,17 @@ Interface (WSGI).
 
 * Test Flask App integration with Storage Engine:
 
-```
-$ cat 7-dump.sql | mysql -uroot -p
+```mysql
+ cat 7-dump.sql | mysql -uroot -p
 ```
 
 * Test complete integation with files AirBnB HTML: `10-hbnb.py` &
   `100-hbnb.html`. Execute from root directory (`AirBnB_clone`) with all the
   necessary environmental variables to establish the database storage model:
 
-```
-$ cat 100-dump.sql | mysql -uroot -p
-$ python3 -m web_flask.100-hbnb
+```mysql,python
+ cat 100-dump.sql | mysql -uroot -p
+ python3 -m web_flask.100-hbnb
 ```
 
 ## License
